@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Viewer, Entity } from 'resium';
 
 import {
+  Cartesian2,
   Cartesian3,
   Color,
   Ion,
@@ -124,11 +125,7 @@ export default function GlobeComponent() {
                   fillColor: Color.WHITE,
                   showBackground: true,
                   backgroundColor: Color.BLACK,
-                  pixelOffset: new Cartesian3(
-                    0,
-                    -40,
-                    0
-                  ),
+                  pixelOffset: new Cartesian2(0, -40),
                 }}
                 description={`
                   <div style="padding:10px">
