@@ -2,17 +2,21 @@
 
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Viewer, Entity } from 'resium';
 
+import type { Viewer as CesiumViewer } from 'cesium';
+
 import {
+  ArcGisMapServerImageryProvider,
+  BoundingSphere,
   Cartesian2,
   Cartesian3,
   Color,
-  Ion,
-  ScreenSpaceEventHandler,
-  ScreenSpaceEventType,
+  EllipsoidTerrainProvider,
+  HeadingPitchRange,
+  Math as CesiumMath,
 } from 'cesium';
 
 import { motion } from 'framer-motion';
@@ -21,19 +25,50 @@ import '../../lib/cesiumClient';
 
 import ListingSidebar from './ListingSidebar';
 import { listings } from '../data/listings';
-import { ImageryLayer } from 'resium';
 
-import {
-  ArcGisMapServerImageryProvider,
-} from 'cesium';
+const WORLD_IMAGERY_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer';
+
+const WORLD_LABELS_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer';
+
+async function setupViewer(viewer: CesiumViewer) {
+  viewer.imageryLayers.removeAll();
+
+  const satelliteImagery =
+    await ArcGisMapServerImageryProvider.fromUrl(WORLD_IMAGERY_URL);
+  viewer.imageryLayers.addImageryProvider(satelliteImagery);
+
+  const placeLabels =
+    await ArcGisMapServerImageryProvider.fromUrl(WORLD_LABELS_URL);
+  viewer.imageryLayers.addImageryProvider(placeLabels);
+
+  viewer.terrainProvider = new EllipsoidTerrainProvider();
+}
+
+const EARTH_RADIUS_METERS = 6378137;
+
+/** Full Earth in view, centered in the canvas (not zoomed to listing cluster). */
+function frameFullGlobe(viewer: CesiumViewer, duration = 1.5) {
+  const earth = new BoundingSphere(Cartesian3.ZERO, EARTH_RADIUS_METERS);
+
+  viewer.resize();
+  viewer.camera.flyToBoundingSphere(earth, {
+    duration,
+    offset: new HeadingPitchRange(
+      CesiumMath.toRadians(25),
+      CesiumMath.toRadians(-28),
+      EARTH_RADIUS_METERS * 5.8
+    ),
+  });
+}
 
 export default function GlobeComponent() {
-  const viewerRef = useRef<any>(null);
+  const viewerRef = useRef<CesiumViewer | null>(null);
+  const hasFramedGlobe = useRef(false);
 
   const [selectedCity, setSelectedCity] =
     useState<string | null>(null);
-
-  const [hovered, setHovered] = useState<any>(null);
 
   const filteredListings = selectedCity
     ? listings.filter(
@@ -41,19 +76,18 @@ export default function GlobeComponent() {
     )
     : [];
 
-  useEffect(() => {
-    if (!viewerRef.current?.cesiumElement) return;
+  const handleViewerRef = (ref: { cesiumElement?: CesiumViewer } | null) => {
+    const viewer = ref?.cesiumElement;
+    if (!viewer || hasFramedGlobe.current) return;
 
-    const viewer = viewerRef.current.cesiumElement;
+    viewerRef.current = viewer;
+    hasFramedGlobe.current = true;
 
-    viewer.camera.flyTo({
-      destination: Cartesian3.fromDegrees(
-        90,
-        24,
-        4500000
-      ),
-    });
-  }, []);
+    void (async () => {
+      await setupViewer(viewer);
+      requestAnimationFrame(() => frameFullGlobe(viewer, 0));
+    })();
+  };
 
   return (
     <div className="h-screen w-full overflow-hidden bg-black">
@@ -81,7 +115,7 @@ export default function GlobeComponent() {
           className="relative h-full"
         >
           <Viewer
-            ref={viewerRef}
+            ref={handleViewerRef}
             full
             animation={false}
             timeline={false}
@@ -92,15 +126,7 @@ export default function GlobeComponent() {
             geocoder={false}
             infoBox={false}
             selectionIndicator={false}
-
           >
-            <ImageryLayer
-              imageryProvider={
-                ArcGisMapServerImageryProvider.fromUrl(
-                  'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer'
-                )
-              }
-            />
             {listings.map((item) => (
               <Entity
                 key={item.id}
@@ -129,26 +155,24 @@ export default function GlobeComponent() {
                   backgroundColor: Color.BLACK,
                   pixelOffset: new Cartesian2(0, -40),
                 }}
-                // description={`
-                //   <div style="padding:10px">
-                //     <h2>${item.title}</h2>
-                //     <p>${item.price}</p>
-                //     <p>${item.city}</p>
-                //   </div>
-                // `}
+                description={`
+                  <div style="padding:10px">
+                    <h2>${item.title}</h2>
+                    <p>${item.price}</p>
+                    <p>${item.city}</p>
+                  </div>
+                `}
                 onClick={() => {
                   setSelectedCity(item.city);
 
-                  viewerRef.current?.cesiumElement.camera.flyTo(
-                    {
-                      destination:
-                        Cartesian3.fromDegrees(
-                          item.lng,
-                          item.lat,
-                          1500000
-                        ),
-                    }
-                  );
+                  viewerRef.current?.camera.flyTo({
+                    destination: Cartesian3.fromDegrees(
+                      item.lng,
+                      item.lat,
+                      800000
+                    ),
+                    duration: 1.5,
+                  });
                 }}
               />
             ))}
@@ -167,7 +191,12 @@ export default function GlobeComponent() {
 
             {selectedCity && (
               <button
-                onClick={() => setSelectedCity(null)}
+                onClick={() => {
+                  setSelectedCity(null);
+                  if (viewerRef.current) {
+                    frameFullGlobe(viewerRef.current);
+                  }
+                }}
                 className="mt-4 rounded-xl bg-cyan-500 px-4 py-2 font-semibold"
               >
                 Back To Globe
