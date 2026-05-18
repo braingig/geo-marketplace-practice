@@ -127,13 +127,13 @@ export default function GlobeComponent() {
                   backgroundColor: Color.BLACK,
                   pixelOffset: new Cartesian2(0, -40),
                 }}
-                description={`
-                  <div style="padding:10px">
-                    <h2>${item.title}</h2>
-                    <p>${item.price}</p>
-                    <p>${item.city}</p>
-                  </div>
-                `}
+                // description={`
+                //   <div style="padding:10px">
+                //     <h2>${item.title}</h2>
+                //     <p>${item.price}</p>
+                //     <p>${item.city}</p>
+                //   </div>
+                // `}
                 onClick={() => {
                   setSelectedCity(item.city);
 
