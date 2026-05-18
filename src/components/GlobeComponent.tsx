@@ -1,5 +1,7 @@
 'use client';
 
+import 'cesium/Build/Cesium/Widgets/widgets.css';
+
 import { useEffect, useRef, useState } from 'react';
 
 import { Viewer, Entity } from 'resium';
